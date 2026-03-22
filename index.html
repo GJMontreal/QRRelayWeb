@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>QRRelay</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Scanner Screen ─────────────────────────────────── -->
+<div id="screen-scanner" class="screen">
+    <nav class="top-toolbar">
+        <div class="toolbar-left">
+            <button id="btn-inspect" class="icon-btn" title="Inspect Mode">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/>
+                    <rect x="3" y="15" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/>
+                    <line x1="12" y1="6" x2="12" y2="6.01"/><line x1="6" y1="12" x2="6" y2="12.01"/>
+                    <line x1="12" y1="12" x2="12" y2="12.01"/><line x1="18" y1="12" x2="18" y2="12.01"/>
+                    <line x1="12" y1="18" x2="12" y2="18.01"/>
+                </svg>
+            </button>
+            <button id="btn-flash" class="icon-btn" title="Flashlight">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+            </button>
+        </div>
+        <button id="btn-config-title" class="config-title-btn" aria-label="Switch configuration">
+            <span id="config-title-text">—</span>
+            <svg id="config-chevron" class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+        </button>
+        <div class="toolbar-right">
+            <button id="btn-settings" class="icon-btn" title="Settings">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+            </button>
+        </div>
+    </nav>
+
+    <div id="config-switcher" class="config-switcher" style="display:none"></div>
+
+    <div id="viewfinder">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <canvas id="scan-canvas"></canvas>
+        <div id="focus-rect"></div>
+    </div>
+
+    <div id="result-panel" class="result-panel" style="display:none">
+        <div id="inspect-type" class="inspect-type" style="display:none"></div>
+        <div id="code-display" class="code-display" style="display:none"></div>
+        <div class="action-row">
+            <button id="btn-send" class="action-btn primary-btn" style="display:none">Send</button>
+            <div id="send-spinner" class="spinner" style="display:none"></div>
+            <button id="btn-scan-again" class="action-btn">Scan Again</button>
+        </div>
+    </div>
+
+    <div id="cooldown-overlay" class="cooldown-overlay" style="display:none">
+        <div class="cooldown-content">
+            <svg class="cooldown-ring" viewBox="0 0 60 60">
+                <circle class="ring-bg" cx="30" cy="30" r="26"/>
+                <circle class="ring-fg" id="cooldown-ring-fg" cx="30" cy="30" r="26"/>
+            </svg>
+            <span id="cooldown-seconds">2</span>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" style="display:none"></div>
+</div>
+
+<!-- ── Extra Parameters Sheet ─────────────────────────── -->
+<div id="sheet-params" class="sheet" style="display:none">
+    <div class="sheet-header">
+        <button id="btn-params-cancel" class="sheet-btn">Cancel</button>
+        <span class="sheet-title">Additional Info</span>
+        <button id="btn-params-send" class="sheet-btn primary">Send</button>
+    </div>
+    <div id="params-form" class="params-form"></div>
+</div>
+
+<!-- ── Response Sheet ─────────────────────────────────── -->
+<div id="sheet-response" class="sheet" style="display:none">
+    <div class="sheet-header">
+        <span></span>
+        <span class="sheet-title">Response</span>
+        <button id="btn-response-close" class="sheet-btn primary">Done</button>
+    </div>
+    <iframe id="response-frame" class="response-frame" sandbox="allow-same-origin allow-scripts"></iframe>
+</div>
+
+<!-- ── Settings Screen ────────────────────────────────── -->
+<div id="screen-settings" class="screen slide-screen" style="display:none">
+    <nav class="top-toolbar">
+        <button id="btn-settings-back" class="back-btn">
+            <svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <polyline points="8 1 1 8 8 15"/>
+            </svg>
+            Back
+        </button>
+        <span class="screen-title">Configurations</span>
+        <button id="btn-config-add" class="icon-btn" title="Add configuration" style="font-size:24px; line-height:1;">+</button>
+    </nav>
+    <div id="configs-list" class="list-container"></div>
+    <div class="footer-link">
+        <a href="https://ko-fi.com/gjmontreal" target="_blank" rel="noopener">If you find this app useful, consider buying me a coffee ☕</a>
+    </div>
+</div>
+
+<!-- ── Config Edit Screen ─────────────────────────────── -->
+<div id="screen-config-edit" class="screen slide-screen" style="display:none">
+    <nav class="top-toolbar">
+        <button id="btn-edit-back" class="back-btn">
+            <svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <polyline points="8 1 1 8 8 15"/>
+            </svg>
+            Back
+        </button>
+        <span class="screen-title" id="edit-screen-title">Configuration</span>
+        <span style="min-width:60px"></span>
+    </nav>
+    <div id="config-edit-form" class="list-container"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
