@@ -121,11 +121,13 @@ async function scanLoop() {
         const video = $('camera-video');
         if (video.readyState >= video.HAVE_ENOUGH_DATA) {
             try {
-                const detected = S.detector  ? await detectWithBarcodeDetector(video)
-                               : S.zxingWasm ? await detectWithZXing(video)
-                               : null;
+                let detected = null;
+                if (S.detector)       detected = await detectWithBarcodeDetector(video);
+                else if (S.zxingWasm) detected = await detectWithZXing(video);
                 if (detected && S.isScanning) onDetected(detected);
-            } catch (_) { /* empty frame */ }
+            } catch (e) { 
+              console.error(e); 
+            }
         }
     }
 
