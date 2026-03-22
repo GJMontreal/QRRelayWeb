@@ -119,7 +119,9 @@ async function buildDetector() {
         const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
         const cfg = activeCfg();
         const wanted = S.inspectMode ? SYMBOLOGIES : (cfg.allowedSymbologies || SYMBOLOGIES);
-        const formats = wanted.filter(f => supported.includes(f));
+        // If getSupportedFormats() failed or returned nothing, try the wanted
+        // formats directly rather than falling back to qr_code only.
+        const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
         S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
         return;
     }
