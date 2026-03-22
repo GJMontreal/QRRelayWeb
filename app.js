@@ -254,19 +254,20 @@ async function doSend(paramValues) {
 function buildURL(cfg, paramValues) {
     const port    = cfg.port ? `:${cfg.port}` : '';
     const rawPath = (cfg.endpoint || '').replace(/^\/+/, '');
-    const base    = `${cfg.scheme}://${cfg.host || 'localhost'}${port}${rawPath ? `/${rawPath}` : ''}`;
-    const url     = new URL(base);
-    url.searchParams.set(cfg.parameterName || 'code', S.scannedCode);
-    if (cfg.includeTimestamp) url.searchParams.set('timestamp', new Date().toISOString());
+    const path    = rawPath ? `/${rawPath}` : '';
+    const base    = `${cfg.scheme}://${cfg.host || 'localhost'}${port}${path}`;
+    const p       = new URLSearchParams();
+    p.set(cfg.parameterName || 'code', S.scannedCode);
+    if (cfg.includeTimestamp) p.set('timestamp', new Date().toISOString());
     if (cfg.includeLocation && S.lastLocation) {
-        url.searchParams.set('lat', S.lastLocation.latitude.toFixed(6));
-        url.searchParams.set('lon', S.lastLocation.longitude.toFixed(6));
+        p.set('lat', S.lastLocation.latitude.toFixed(6));
+        p.set('lon', S.lastLocation.longitude.toFixed(6));
     }
     for (const param of cfg.extraParameters || []) {
         const val = param.inputMode === 'fixed' ? param.fixedValue : (paramValues[param.id] || '');
-        if (val) url.searchParams.set(param.name, val);
+        if (val) p.set(param.name, val);
     }
-    return url.toString();
+    return `${base}?${p}`;
 }
 
 function buildHeaders(cfg) {
