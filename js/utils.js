@@ -2,12 +2,6 @@ let toastTimer = null;
 
 export function $(id) { return document.getElementById(id); }
 
-export function esc(s) {
-    return String(s)
-        .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-}
-
 export function showToast(msg, ms = 3200) {
     const el = $('toast');
     el.textContent = msg;
