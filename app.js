@@ -147,10 +147,17 @@ async function buildDetector() {
         const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
         S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
         S.zxingWasm = false;
+        setScannerEngineLabel('BarcodeDetector (native)');
         return;
     }
     S.detector = null;
     await loadZXingWasm(wanted);
+    setScannerEngineLabel('zxing-wasm');
+}
+
+function setScannerEngineLabel(text) {
+    const el = document.getElementById('scanner-engine-label');
+    if (el) el.textContent = `scanner: ${text}`;
 }
 
 async function startScanning() {
