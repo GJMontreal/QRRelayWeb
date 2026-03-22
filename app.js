@@ -906,10 +906,11 @@ async function init() {
     updateInspectBtn();
     updateFlashBtn();
     wire();
-    fetch('version.json').then(r => r.json()).then(v => {
-        const el = document.getElementById('version-label');
-        if (el) el.textContent = v.sha;
-    }).catch(() => {});
+    fetch('https://api.github.com/repos/GJMontreal/QRRelayWeb/commits/main')
+        .then(r => r.json()).then(d => {
+            const el = document.getElementById('version-label');
+            if (el && d.sha) el.textContent = d.sha.slice(0, 7);
+        }).catch(() => {});
     await startCamera();
 }
 
