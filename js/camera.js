@@ -87,6 +87,33 @@ export function resumeScanning() {
     if (!S.scanActive) startScanning();
 }
 
+async function detectWithBarcodeDetector(video) {
+    const barcodes = await S.detector.detect(video);
+    if (!barcodes.length) return null;
+    const { rawValue: value, format, cornerPoints } = barcodes[0];
+    return { value, format, cornerPoints };
+}
+
+async function detectWithZXing(video) {
+    if (!S._zxCanvas) {
+        S._zxCanvas = document.createElement('canvas');
+        S._zxCanvas.style.display = 'none';
+        document.body.appendChild(S._zxCanvas);
+    }
+    const zxc = S._zxCanvas;
+    zxc.width = video.videoWidth;
+    zxc.height = video.videoHeight;
+    const ctx = zxc.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const imageData = ctx.getImageData(0, 0, zxc.width, zxc.height);
+    const results = await ZXingWASM.readBarcodes(imageData, { formats: S.zxingFormats, tryHarder: true });
+    if (!results.length) return null;
+    const { text: value, format, position: p } = results[0];
+    const sym = ZXING_TO_SYM[format] || format.toLowerCase();
+    const cornerPoints = p ? [p.topLeft, p.topRight, p.bottomRight, p.bottomLeft] : null;
+    return { value, format: sym, cornerPoints };
+}
+
 async function scanLoop() {
     if (!S.scanActive) return;
 
@@ -94,36 +121,9 @@ async function scanLoop() {
         const video = $('camera-video');
         if (video.readyState >= video.HAVE_ENOUGH_DATA) {
             try {
-                let detected = null;
-
-                if (S.detector) {
-                    const barcodes = await S.detector.detect(video);
-                    if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
-                } else if (S.zxingWasm) {
-                    if (!S._zxCanvas) {
-                        S._zxCanvas = document.createElement('canvas');
-                        S._zxCanvas.style.display = 'none';
-                        document.body.appendChild(S._zxCanvas);
-                    }
-                    const zxc = S._zxCanvas;
-                    zxc.width = video.videoWidth;
-                    zxc.height = video.videoHeight;
-                    const ctx2 = zxc.getContext('2d');
-                    ctx2.drawImage(video, 0, 0);
-                    const imageData = ctx2.getImageData(0, 0, zxc.width, zxc.height);
-                    const results = await ZXingWASM.readBarcodes(imageData, {
-                        formats: S.zxingFormats,
-                        tryHarder: true,
-                    });
-                    if (results.length) {
-                        const r = results[0];
-                        const sym = ZXING_TO_SYM[r.format] || r.format.toLowerCase();
-                        const p = r.position;
-                        const cornerPoints = p ? [p.topLeft, p.topRight, p.bottomRight, p.bottomLeft] : null;
-                        detected = { value: r.text, format: sym, cornerPoints };
-                    }
-                }
-
+                const detected = S.detector  ? await detectWithBarcodeDetector(video)
+                               : S.zxingWasm ? await detectWithZXing(video)
+                               : null;
                 if (detected && S.isScanning) onDetected(detected);
             } catch (_) { /* empty frame */ }
         }
