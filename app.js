@@ -252,21 +252,21 @@ async function doSend(paramValues) {
 }
 
 function buildURL(cfg, paramValues) {
-    const port = cfg.port ? `:${cfg.port}` : '';
-    const ep   = cfg.endpoint ? (cfg.endpoint.startsWith('/') ? cfg.endpoint : `/${cfg.endpoint}`) : '';
-    const base = `${cfg.scheme}://${cfg.host || 'localhost'}${port}${ep}`;
-    const p = new URLSearchParams();
-    p.set(cfg.parameterName || 'code', S.scannedCode);
-    if (cfg.includeTimestamp) p.set('timestamp', new Date().toISOString());
+    const port    = cfg.port ? `:${cfg.port}` : '';
+    const rawPath = (cfg.endpoint || '').replace(/^\/+/, '');
+    const base    = `${cfg.scheme}://${cfg.host || 'localhost'}${port}${rawPath ? `/${rawPath}` : ''}`;
+    const url     = new URL(base);
+    url.searchParams.set(cfg.parameterName || 'code', S.scannedCode);
+    if (cfg.includeTimestamp) url.searchParams.set('timestamp', new Date().toISOString());
     if (cfg.includeLocation && S.lastLocation) {
-        p.set('lat', S.lastLocation.latitude.toFixed(6));
-        p.set('lon', S.lastLocation.longitude.toFixed(6));
+        url.searchParams.set('lat', S.lastLocation.latitude.toFixed(6));
+        url.searchParams.set('lon', S.lastLocation.longitude.toFixed(6));
     }
-    for (const ep of cfg.extraParameters || []) {
-        const val = ep.inputMode === 'fixed' ? ep.fixedValue : (paramValues[ep.id] || '');
-        if (val) p.set(ep.name, val);
+    for (const param of cfg.extraParameters || []) {
+        const val = param.inputMode === 'fixed' ? param.fixedValue : (paramValues[param.id] || '');
+        if (val) url.searchParams.set(param.name, val);
     }
-    return `${base}?${p}`;
+    return url.toString();
 }
 
 function buildHeaders(cfg) {
