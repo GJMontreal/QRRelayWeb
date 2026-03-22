@@ -560,6 +560,31 @@ function hideConfigEdit() {
 function setField(field, value) {
     const cfg = S.configs.find(c => c.id === S.editingId); if (!cfg) return;
     cfg[field] = value; saveConfigs();
+    updatePreview(cfg);
+}
+
+function previewURL(cfg) {
+    const port    = cfg.port ? `:${cfg.port}` : '';
+    const rawPath = (cfg.endpoint || '').replace(/^\/+/, '');
+    const path    = rawPath ? `/${rawPath}` : '';
+    let url = `${cfg.scheme}://${cfg.host || '…'}${port}${path}?${cfg.parameterName || 'code'}=`;
+    if (cfg.includeTimestamp) url += `&timestamp=${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
+    if (cfg.includeLocation) {
+        if (S.lastLocation) url += `&lat=${S.lastLocation.latitude.toFixed(4)}&lon=${S.lastLocation.longitude.toFixed(4)}`;
+        else url += `&lat=…&lon=…`;
+    }
+    for (const p of cfg.extraParameters || []) {
+        if (!p.name) continue;
+        if (p.inputMode === 'fixed')     url += `&${p.name}=${p.fixedValue}`;
+        else if (p.inputMode === 'numberpad') url += `&${p.name}=0`;
+        else url += `&${p.name}=…`;
+    }
+    return url;
+}
+
+function updatePreview(cfg) {
+    const el = document.getElementById('url-preview-text');
+    if (el) el.textContent = previewURL(cfg);
 }
 
 function renderConfigEdit(cfg) {
@@ -612,6 +637,9 @@ function renderConfigEdit(cfg) {
 
     // — Extra Parameters
     container.appendChild(makeExtraParamsSection(cfg));
+
+    // Preview section
+    container.appendChild(makePreviewSection(cfg));
 
     // Bottom padding
     const pad = document.createElement('div'); pad.style.height = '40px';
@@ -730,6 +758,19 @@ function makeSymSection(cfg) {
     return sec;
 }
 
+function makePreviewSection(cfg) {
+    const sec = makeSection('Preview');
+    const card = document.createElement('div'); card.className = 'card';
+    const row = document.createElement('div'); row.className = 'list-row';
+    row.style.alignItems = 'flex-start';
+    const txt = document.createElement('div');
+    txt.id = 'url-preview-text';
+    txt.style.cssText = 'font-size:12px; color:var(--text2); word-break:break-all; line-height:1.5; font-family:monospace; padding:2px 0;';
+    txt.textContent = previewURL(cfg);
+    row.appendChild(txt); card.appendChild(row); sec.appendChild(card);
+    return sec;
+}
+
 function makeExtraParamsSection(cfg) {
     const sec = document.createElement('div'); sec.className = 'list-section';
 
@@ -751,7 +792,7 @@ function makeExtraParamsSection(cfg) {
         const modeLabels  = ['Text', 'Number', 'Fixed'];
 
         [
-            makeTextRow('Key',   'name',  param.name,  param, 'query_key',   v => { param.name  = v; saveConfigs(); }),
+            makeTextRow('Key',   'name',  param.name,  param, 'query_key',   v => { param.name  = v; saveConfigs(); updatePreview(cfg); }),
             makeTextRow('Label', 'label', param.label, param, 'User prompt', v => { param.label = v; saveConfigs(); }),
             makeSelectRow('Mode', 'inputMode', modeOptions, modeLabels, param, () => {
                 saveConfigs(); renderConfigEdit(cfg);
