@@ -1,7 +1,7 @@
 import { S } from './state.js';
 import { loadConfigs, newConfig, saveConfigs } from './config.js';
 import { $ } from './utils.js';
-import { updateConfigTitle, updateInspectBtn, updateFlashBtn, openSwitcher, closeSwitcher, hideSheet, hideResponseSheet } from './ui.js';
+import { updateConfigTitle, updateInspectBtn, updateFlashBtn, openSwitcher, closeSwitcher, hideScreen, hideResponseSheet } from './ui.js';
 import { showSettings, hideSettings, showConfigEdit, hideConfigEdit } from './config-edit.js';
 import { startCamera, stopScanning, resumeScanning, toggleFlash } from './camera.js';
 import { prepareSend, doSend } from './network.js';
@@ -35,8 +35,8 @@ function wire() {
     $('btn-send').addEventListener('click', prepareSend);
     $('btn-scan-again').addEventListener('click', resumeScanning);
 
-    $('btn-params-cancel').addEventListener('click', () => hideSheet('sheet-params'));
-    $('btn-params-send').addEventListener('click', () => { hideSheet('sheet-params'); doSend(S.pendingParams); });
+    $('btn-params-cancel').addEventListener('click', () => hideScreen('sheet-params'));
+    $('btn-params-send').addEventListener('click', () => { hideScreen('sheet-params'); doSend(S.pendingParams); });
 
     $('btn-response-close').addEventListener('click', hideResponseSheet);
 

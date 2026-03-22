@@ -40,11 +40,11 @@ export function renderResultPanel() {
     }
 
     const sendBtn = $('btn-send');
-    if (!S.inspectMode) {
+    if (S.inspectMode) {
+        sendBtn.style.display = 'none';
+    } else {
         sendBtn.style.display = '';
         sendBtn.disabled = S.isSending;
-    } else {
-        sendBtn.style.display = 'none';
     }
 
     $('send-spinner').style.display = S.isSending ? 'block' : 'none';
@@ -87,20 +87,7 @@ export function closeSwitcher() {
     $('config-chevron').classList.remove('open');
 }
 
-// ── Sheet helpers ─────────────────────────────────────────────────────────────
-export function showSheet(id) {
-    const el = $(id);
-    el.style.display = 'flex';
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('visible')));
-}
-
-export function hideSheet(id) {
-    const el = $(id);
-    el.classList.remove('visible');
-    el.addEventListener('transitionend', () => { el.style.display = 'none'; }, { once: true });
-}
-
-// ── Slide screens ─────────────────────────────────────────────────────────────
+// ── Panels (sheets and slide screens share the same show/hide mechanism) ─────
 export function showScreen(id) {
     const el = $(id);
     el.style.display = 'flex';
@@ -137,7 +124,7 @@ export function showParamsSheet(params) {
         inp.addEventListener('input', () => { S.pendingParams[p.id] = inp.value; });
         sec.append(lbl, inp); form.appendChild(sec);
     });
-    showSheet('sheet-params');
+    showScreen('sheet-params');
 }
 
 // ── Response sheet ────────────────────────────────────────────────────────────
@@ -147,11 +134,11 @@ export function showResponseSheet(html) {
     const url = URL.createObjectURL(blob);
     frame.src = url;
     frame._blobUrl = url;
-    showSheet('sheet-response');
+    showScreen('sheet-response');
 }
 
 export function hideResponseSheet() {
-    hideSheet('sheet-response');
+    hideScreen('sheet-response');
     const frame = $('response-frame');
     if (frame._blobUrl) { URL.revokeObjectURL(frame._blobUrl); frame._blobUrl = null; }
     const cfg = activeCfg();
