@@ -147,17 +147,12 @@ async function buildDetector() {
         const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
         S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
         S.zxingWasm = false;
-        setScannerEngineLabel('BarcodeDetector (native)');
+        refreshScannerEngineLabel();
         return;
     }
     S.detector = null;
     await loadZXingWasm(wanted);
-    setScannerEngineLabel('zxing-wasm');
-}
-
-function setScannerEngineLabel(text) {
-    const el = document.getElementById('scanner-engine-label');
-    if (el) el.textContent = `scanner: ${text}`;
+    refreshScannerEngineLabel();
 }
 
 async function startScanning() {
@@ -544,7 +539,15 @@ function hideScreen(id) {
 }
 
 // ── Settings screen ───────────────────────────────────────────────────────────
-function showSettings() { renderConfigsList(); showScreen('screen-settings'); }
+function showSettings() { renderConfigsList(); refreshScannerEngineLabel(); showScreen('screen-settings'); }
+
+function refreshScannerEngineLabel() {
+    const el = document.getElementById('scanner-engine-label');
+    if (!el) return;
+    if (S.detector) el.textContent = 'scanner: BarcodeDetector (native)';
+    else if (S.zxingWasm) el.textContent = 'scanner: zxing-wasm';
+    else el.textContent = 'scanner: initialising…';
+}
 function hideSettings()  { hideScreen('screen-settings'); }
 
 function renderConfigsList() {
