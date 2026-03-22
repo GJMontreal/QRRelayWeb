@@ -153,6 +153,9 @@ function resumeScanning() {
     S.scannedCode = '';
     S.detectedType = '';
     S.isScanning = true;
+    const canvas = $('scan-canvas');
+    canvas.style.display = 'none';
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
     renderResultPanel();
     if (!S.scanActive) startScanning();
 }
@@ -168,7 +171,7 @@ async function scanLoop() {
 
             if (S.detector) {
                 const barcodes = await S.detector.detect(video);
-                if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format };
+                if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
             } else if (window.jsQR) {
                 const canvas = $('scan-canvas');
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -177,7 +180,7 @@ async function scanLoop() {
                 ctx.drawImage(video, 0, 0);
                 const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(img.data, img.width, img.height);
-                if (code) detected = { value: code.data, format: 'qr_code' };
+                if (code) detected = { value: code.data, format: 'qr_code', cornerPoints: [code.location.topLeftCorner, code.location.topRightCorner, code.location.bottomRightCorner, code.location.bottomLeftCorner] };
             }
 
             if (detected && S.isScanning) onDetected(detected);
@@ -187,17 +190,50 @@ async function scanLoop() {
     S.rafId = requestAnimationFrame(scanLoop);
 }
 
-function onDetected({ value, format }) {
+function onDetected({ value, format, cornerPoints }) {
     S.isScanning = false;
     S.scannedCode = value;
     S.detectedType = SYM_LABELS[format] || format;
 
-    // Copy to clipboard (requires HTTPS or localhost)
     navigator.clipboard.writeText(value).catch(() => {});
-
+    if (cornerPoints) drawOutline(cornerPoints);
     renderResultPanel();
 
     if (!S.inspectMode && activeCfg().autoSend) prepareSend();
+}
+
+function drawOutline(points) {
+    const video  = $('camera-video');
+    const canvas = $('scan-canvas');
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const cw = video.clientWidth;
+    const ch = video.clientHeight;
+
+    canvas.width  = cw;
+    canvas.height = ch;
+
+    // Map from video natural coords → displayed coords (object-fit: cover)
+    const scale   = Math.max(cw / vw, ch / vh);
+    const offsetX = (cw - vw * scale) / 2;
+    const offsetY = (ch - vh * scale) / 2;
+    const map = p => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY });
+    const mapped = points.map(map);
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.beginPath();
+    ctx.moveTo(mapped[0].x, mapped[0].y);
+    for (let i = 1; i < mapped.length; i++) ctx.lineTo(mapped[i].x, mapped[i].y);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255, 214, 10, 0.9)';  // yellow, matching inspect mode colour
+    ctx.lineWidth   = 3;
+    ctx.lineJoin    = 'round';
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 214, 10, 0.15)';
+    ctx.fill();
+
+    canvas.style.display = 'block';
 }
 
 // ── Flashlight ────────────────────────────────────────────────────────────────

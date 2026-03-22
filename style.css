@@ -160,6 +160,7 @@ html, body {
     height: 100%;
     display: none;
     pointer-events: none;
+    z-index: 2;
 }
 #focus-rect {
     position: absolute;
