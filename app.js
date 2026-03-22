@@ -141,8 +141,8 @@ async function loadZXing(wanted) {
         .filter(f => f !== undefined);
     if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
     hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    S.zxingReader = new ZXing.MultiFormatReader();
-    S.zxingReader.setHints(hints);
+    // BrowserMultiFormatReader handles canvas→luminance conversion internally
+    S.zxingReader = new ZXing.BrowserMultiFormatReader(hints);
 }
 
 async function buildDetector() {
@@ -214,7 +214,6 @@ async function scanLoop() {
                     const barcodes = await S.detector.detect(video);
                     if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
                 } else if (S.zxingReader) {
-                    // Use a hidden offscreen canvas so ZXing can read pixels
                     if (!S._zxCanvas) {
                         S._zxCanvas = document.createElement('canvas');
                         S._zxCanvas.style.display = 'none';
@@ -225,12 +224,11 @@ async function scanLoop() {
                     zxc.height = video.videoHeight;
                     zxc.getContext('2d').drawImage(video, 0, 0);
                     try {
-                        // HTMLCanvasElementLuminanceSource handles RGBA → luminance correctly
-                        const lum = new ZXing.HTMLCanvasElementLuminanceSource(zxc);
-                        const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
-                        const result = S.zxingReader.decode(bmp);
+                        // decodeFromCanvas handles RGBA luminance conversion internally
+                        const result = S.zxingReader.decodeFromCanvas(zxc);
                         const fmtNum = result.getBarcodeFormat();
-                        const fmtName = Object.keys(ZXing.BarcodeFormat).find(k => ZXing.BarcodeFormat[k] === fmtNum) || '';
+                        // TypeScript enums have reverse mappings — filter to string-keyed entries only
+                        const fmtName = Object.keys(ZXing.BarcodeFormat).find(k => isNaN(Number(k)) && ZXing.BarcodeFormat[k] === fmtNum) || '';
                         const sym = ZXING_TO_SYM[fmtName] || fmtName.toLowerCase();
                         const pts = result.getResultPoints();
                         detected = { value: result.getText(), format: sym, cornerPoints: pts.length ? zxingPointsToCorners(pts) : null };
