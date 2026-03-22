@@ -2,7 +2,7 @@ import { S } from './state.js';
 import { loadConfigs, newConfig, saveConfigs } from './config.js';
 import { $ } from './utils.js';
 import { updateConfigTitle, updateInspectBtn, updateFlashBtn, openSwitcher, closeSwitcher, hideSheet, hideResponseSheet } from './ui.js';
-import { showSettings, hideSettings, showConfigEdit, hideConfigEdit, renderConfigsList } from './config-edit.js';
+import { showSettings, hideSettings, showConfigEdit, hideConfigEdit } from './config-edit.js';
 import { startCamera, stopScanning, resumeScanning, toggleFlash } from './camera.js';
 import { prepareSend, doSend } from './network.js';
 
