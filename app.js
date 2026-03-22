@@ -148,7 +148,7 @@ async function startScanning() {
 
 function stopScanning() {
     S.scanActive = false;
-    if (S.rafId) { cancelAnimationFrame(S.rafId); S.rafId = null; }
+    if (S.rafId) { clearTimeout(S.rafId); S.rafId = null; }
 }
 
 function resumeScanning() {
@@ -165,32 +165,33 @@ function resumeScanning() {
 
 async function scanLoop() {
     if (!S.scanActive) return;
-    if (!S.isScanning) { S.rafId = requestAnimationFrame(scanLoop); return; }
 
-    const video = $('camera-video');
-    if (video.readyState >= video.HAVE_ENOUGH_DATA) {
-        try {
-            let detected = null;
+    if (S.isScanning) {
+        const video = $('camera-video');
+        if (video.readyState >= video.HAVE_ENOUGH_DATA) {
+            try {
+                let detected = null;
 
-            if (S.detector) {
-                const barcodes = await S.detector.detect(video);
-                if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
-            } else if (window.jsQR) {
-                const canvas = $('scan-canvas');
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
-                const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(img.data, img.width, img.height);
-                if (code) detected = { value: code.data, format: 'qr_code', cornerPoints: [code.location.topLeftCorner, code.location.topRightCorner, code.location.bottomRightCorner, code.location.bottomLeftCorner] };
-            }
+                if (S.detector) {
+                    const barcodes = await S.detector.detect(video);
+                    if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
+                } else if (window.jsQR) {
+                    const canvas = $('scan-canvas');
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0);
+                    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(img.data, img.width, img.height);
+                    if (code) detected = { value: code.data, format: 'qr_code', cornerPoints: [code.location.topLeftCorner, code.location.topRightCorner, code.location.bottomRightCorner, code.location.bottomLeftCorner] };
+                }
 
-            if (detected && S.isScanning) onDetected(detected);
-        } catch (_) { /* empty frame */ }
+                if (detected && S.isScanning) onDetected(detected);
+            } catch (_) { /* empty frame */ }
+        }
     }
 
-    S.rafId = requestAnimationFrame(scanLoop);
+    S.rafId = setTimeout(scanLoop, 100); // ~10fps — plenty for barcode detection
 }
 
 function onDetected({ value, format, cornerPoints }) {
