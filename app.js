@@ -156,6 +156,7 @@ function resumeScanning() {
     const canvas = $('scan-canvas');
     canvas.style.display = 'none';
     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    $('camera-video').play();
     renderResultPanel();
     if (!S.scanActive) startScanning();
 }
@@ -196,6 +197,7 @@ function onDetected({ value, format, cornerPoints }) {
     S.detectedType = SYM_LABELS[format] || format;
 
     navigator.clipboard.writeText(value).catch(() => {});
+    $('camera-video').pause();
     if (cornerPoints) drawOutline(cornerPoints);
     renderResultPanel();
 
