@@ -16,12 +16,12 @@ const SYM_LABELS = {
     aztec: 'Aztec', data_matrix: 'Data Matrix', pdf417: 'PDF417'
 };
 
-// ZXing format name ↔ our symbology key
+// zxing-wasm format name ↔ our symbology key
 const ZXING_FORMAT_MAP = {
-    qr_code: 'QR_CODE', ean_13: 'EAN_13', ean_8: 'EAN_8',
-    code_128: 'CODE_128', code_39: 'CODE_39', code_93: 'CODE_93',
-    itf: 'ITF', upc_a: 'UPC_A', upc_e: 'UPC_E',
-    aztec: 'AZTEC', data_matrix: 'DATA_MATRIX', pdf417: 'PDF_417'
+    qr_code: 'QRCode', ean_13: 'EAN13', ean_8: 'EAN8',
+    code_128: 'Code128', code_39: 'Code39', code_93: 'Code93',
+    itf: 'ITF', upc_a: 'UPCA', upc_e: 'UPCE',
+    aztec: 'Aztec', data_matrix: 'DataMatrix', pdf417: 'PDF417'
 };
 const ZXING_TO_SYM = Object.fromEntries(Object.entries(ZXING_FORMAT_MAP).map(([k,v]) => [v, k]));
 
@@ -46,7 +46,8 @@ const S = {
     scanActive: false,
     rafId: null,
     detector: null,
-    zxingReader: null,
+    zxingWasm: false,
+    zxingFormats: null,
     lastLocation: null,
     cooldownTick: null,
 };
@@ -123,26 +124,18 @@ function stopCamera() {
 }
 
 // ── Barcode detection ─────────────────────────────────────────────────────────
-async function loadZXing(wanted) {
-    if (S.zxingReader) return;
-    if (!window.ZXing) {
+async function loadZXingWasm(wanted) {
+    if (S.zxingWasm) return;
+    if (!window.ZXingWASM) {
         await new Promise((res, rej) => {
             const s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+            s.src = 'https://cdn.jsdelivr.net/npm/zxing-wasm@3.0.1/dist/iife/full/index.js';
             s.onload = res; s.onerror = rej;
             document.head.appendChild(s);
         });
     }
-    const hints = new Map();
-    const formats = wanted
-        .map(sym => ZXING_FORMAT_MAP[sym])
-        .filter(Boolean)
-        .map(name => ZXing.BarcodeFormat[name])
-        .filter(f => f !== undefined);
-    if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    // BrowserMultiFormatReader handles canvas→luminance conversion internally
-    S.zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+    S.zxingFormats = wanted.map(sym => ZXING_FORMAT_MAP[sym]).filter(Boolean);
+    S.zxingWasm = true;
 }
 
 async function buildDetector() {
@@ -150,30 +143,14 @@ async function buildDetector() {
     const wanted = S.inspectMode ? SYMBOLOGIES : (cfg.allowedSymbologies || SYMBOLOGIES);
 
     if (typeof BarcodeDetector !== 'undefined') {
-        // Use BarcodeDetector with whatever subset of wanted formats it supports.
-        // Don't require it to cover everything — ZXing is only for when BarcodeDetector
-        // is completely absent (e.g. Firefox).
         const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
         const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
         S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
-        S.zxingReader = null;
+        S.zxingWasm = false;
         return;
     }
-    // Fall back to ZXing-js (full format support via canvas pixel scanning)
     S.detector = null;
-    await loadZXing(wanted);
-}
-
-function zxingPointsToCorners(resultPoints) {
-    // ZXing returns result points that vary by format; derive a bounding quad
-    const xs = resultPoints.map(p => p.x);
-    const ys = resultPoints.map(p => p.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    return [
-        { x: minX, y: minY }, { x: maxX, y: minY },
-        { x: maxX, y: maxY }, { x: minX, y: maxY }
-    ];
+    await loadZXingWasm(wanted);
 }
 
 async function startScanning() {
@@ -213,7 +190,7 @@ async function scanLoop() {
                 if (S.detector) {
                     const barcodes = await S.detector.detect(video);
                     if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
-                } else if (S.zxingReader) {
+                } else if (S.zxingWasm) {
                     if (!S._zxCanvas) {
                         S._zxCanvas = document.createElement('canvas');
                         S._zxCanvas.style.display = 'none';
@@ -222,17 +199,20 @@ async function scanLoop() {
                     const zxc = S._zxCanvas;
                     zxc.width = video.videoWidth;
                     zxc.height = video.videoHeight;
-                    zxc.getContext('2d').drawImage(video, 0, 0);
-                    try {
-                        // decodeFromCanvas handles RGBA luminance conversion internally
-                        const result = S.zxingReader.decodeFromCanvas(zxc);
-                        const fmtNum = result.getBarcodeFormat();
-                        // TypeScript enums have reverse mappings — filter to string-keyed entries only
-                        const fmtName = Object.keys(ZXing.BarcodeFormat).find(k => isNaN(Number(k)) && ZXing.BarcodeFormat[k] === fmtNum) || '';
-                        const sym = ZXING_TO_SYM[fmtName] || fmtName.toLowerCase();
-                        const pts = result.getResultPoints();
-                        detected = { value: result.getText(), format: sym, cornerPoints: pts.length ? zxingPointsToCorners(pts) : null };
-                    } catch (_) { /* NotFoundException — no barcode in frame */ }
+                    const ctx2 = zxc.getContext('2d');
+                    ctx2.drawImage(video, 0, 0);
+                    const imageData = ctx2.getImageData(0, 0, zxc.width, zxc.height);
+                    const results = await ZXingWASM.readBarcodes(imageData, {
+                        formats: S.zxingFormats,
+                        tryHarder: true,
+                    });
+                    if (results.length) {
+                        const r = results[0];
+                        const sym = ZXING_TO_SYM[r.format] || r.format.toLowerCase();
+                        const p = r.position;
+                        const cornerPoints = p ? [p.topLeft, p.topRight, p.bottomRight, p.bottomLeft] : null;
+                        detected = { value: r.text, format: sym, cornerPoints };
+                    }
                 }
 
                 if (detected && S.isScanning) onDetected(detected);
