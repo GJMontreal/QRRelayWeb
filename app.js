@@ -864,6 +864,10 @@ async function init() {
     updateInspectBtn();
     updateFlashBtn();
     wire();
+    fetch('version.json').then(r => r.json()).then(v => {
+        const el = document.getElementById('version-label');
+        if (el) el.textContent = v.sha;
+    }).catch(() => {});
     await startCamera();
 }
 
