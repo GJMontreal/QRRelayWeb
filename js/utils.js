@@ -4,8 +4,8 @@ export function $(id) { return document.getElementById(id); }
 
 export function esc(s) {
     return String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 }
 
 export function showToast(msg, ms = 3200) {
