@@ -150,15 +150,14 @@ async function buildDetector() {
     const wanted = S.inspectMode ? SYMBOLOGIES : (cfg.allowedSymbologies || SYMBOLOGIES);
 
     if (typeof BarcodeDetector !== 'undefined') {
+        // Use BarcodeDetector with whatever subset of wanted formats it supports.
+        // Don't require it to cover everything — ZXing is only for when BarcodeDetector
+        // is completely absent (e.g. Firefox).
         const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
-        // Use BarcodeDetector only if it covers ALL wanted formats (or reports none — try anyway)
-        const allCovered = !supported.length || wanted.every(f => supported.includes(f));
-        if (allCovered) {
-            const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
-            S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
-            S.zxingReader = null;
-            return;
-        }
+        const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
+        S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
+        S.zxingReader = null;
+        return;
     }
     // Fall back to ZXing-js (full format support via canvas pixel scanning)
     S.detector = null;
@@ -215,17 +214,21 @@ async function scanLoop() {
                     const barcodes = await S.detector.detect(video);
                     if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
                 } else if (S.zxingReader) {
-                    const canvas = $('scan-canvas');
-                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0);
-                    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    // Use a hidden offscreen canvas so ZXing can read pixels
+                    if (!S._zxCanvas) {
+                        S._zxCanvas = document.createElement('canvas');
+                        S._zxCanvas.style.display = 'none';
+                        document.body.appendChild(S._zxCanvas);
+                    }
+                    const zxc = S._zxCanvas;
+                    zxc.width = video.videoWidth;
+                    zxc.height = video.videoHeight;
+                    zxc.getContext('2d').drawImage(video, 0, 0);
                     try {
-                        const lum = new ZXing.RGBLuminanceSource(img.data, canvas.width, canvas.height);
+                        // HTMLCanvasElementLuminanceSource handles RGBA → luminance correctly
+                        const lum = new ZXing.HTMLCanvasElementLuminanceSource(zxc);
                         const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
                         const result = S.zxingReader.decode(bmp);
-                        // getBarcodeFormat() returns a numeric enum — look up its name via BarcodeFormat
                         const fmtNum = result.getBarcodeFormat();
                         const fmtName = Object.keys(ZXing.BarcodeFormat).find(k => ZXing.BarcodeFormat[k] === fmtNum) || '';
                         const sym = ZXING_TO_SYM[fmtName] || fmtName.toLowerCase();
