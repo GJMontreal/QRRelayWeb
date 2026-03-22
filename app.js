@@ -16,6 +16,15 @@ const SYM_LABELS = {
     aztec: 'Aztec', data_matrix: 'Data Matrix', pdf417: 'PDF417'
 };
 
+// ZXing format name ↔ our symbology key
+const ZXING_FORMAT_MAP = {
+    qr_code: 'QR_CODE', ean_13: 'EAN_13', ean_8: 'EAN_8',
+    code_128: 'CODE_128', code_39: 'CODE_39', code_93: 'CODE_93',
+    itf: 'ITF', upc_a: 'UPC_A', upc_e: 'UPC_E',
+    aztec: 'AZTEC', data_matrix: 'DATA_MATRIX', pdf417: 'PDF_417'
+};
+const ZXING_TO_SYM = Object.fromEntries(Object.entries(ZXING_FORMAT_MAP).map(([k,v]) => [v, k]));
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const S = {
     configs: [],
@@ -37,7 +46,7 @@ const S = {
     scanActive: false,
     rafId: null,
     detector: null,
-    jsQRReady: false,
+    zxingReader: null,
     lastLocation: null,
     cooldownTick: null,
 };
@@ -114,28 +123,58 @@ function stopCamera() {
 }
 
 // ── Barcode detection ─────────────────────────────────────────────────────────
-async function buildDetector() {
-    if (typeof BarcodeDetector !== 'undefined') {
-        const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
-        const cfg = activeCfg();
-        const wanted = S.inspectMode ? SYMBOLOGIES : (cfg.allowedSymbologies || SYMBOLOGIES);
-        // If getSupportedFormats() failed or returned nothing, try the wanted
-        // formats directly rather than falling back to qr_code only.
-        const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
-        S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
-        return;
-    }
-    // jsQR fallback (QR only)
-    if (!S.jsQRReady && !window.jsQR) {
+async function loadZXing(wanted) {
+    if (S.zxingReader) return;
+    if (!window.ZXing) {
         await new Promise((res, rej) => {
             const s = document.createElement('script');
-            s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+            s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
             s.onload = res; s.onerror = rej;
             document.head.appendChild(s);
         });
-        S.jsQRReady = true;
     }
-    S.detector = null; // use jsQR path in scanLoop
+    const hints = new Map();
+    const formats = wanted
+        .map(sym => ZXING_FORMAT_MAP[sym])
+        .filter(Boolean)
+        .map(name => ZXing.BarcodeFormat[name])
+        .filter(f => f !== undefined);
+    if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    S.zxingReader = new ZXing.MultiFormatReader();
+    S.zxingReader.setHints(hints);
+}
+
+async function buildDetector() {
+    const cfg = activeCfg();
+    const wanted = S.inspectMode ? SYMBOLOGIES : (cfg.allowedSymbologies || SYMBOLOGIES);
+
+    if (typeof BarcodeDetector !== 'undefined') {
+        const supported = await BarcodeDetector.getSupportedFormats().catch(() => []);
+        // Use BarcodeDetector only if it covers ALL wanted formats (or reports none — try anyway)
+        const allCovered = !supported.length || wanted.every(f => supported.includes(f));
+        if (allCovered) {
+            const formats = supported.length ? wanted.filter(f => supported.includes(f)) : wanted;
+            S.detector = new BarcodeDetector({ formats: formats.length ? formats : ['qr_code'] });
+            S.zxingReader = null;
+            return;
+        }
+    }
+    // Fall back to ZXing-js (full format support via canvas pixel scanning)
+    S.detector = null;
+    await loadZXing(wanted);
+}
+
+function zxingPointsToCorners(resultPoints) {
+    // ZXing returns result points that vary by format; derive a bounding quad
+    const xs = resultPoints.map(p => p.x);
+    const ys = resultPoints.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    return [
+        { x: minX, y: minY }, { x: maxX, y: minY },
+        { x: maxX, y: maxY }, { x: minX, y: maxY }
+    ];
 }
 
 async function startScanning() {
@@ -175,15 +214,24 @@ async function scanLoop() {
                 if (S.detector) {
                     const barcodes = await S.detector.detect(video);
                     if (barcodes.length) detected = { value: barcodes[0].rawValue, format: barcodes[0].format, cornerPoints: barcodes[0].cornerPoints };
-                } else if (window.jsQR) {
+                } else if (S.zxingReader) {
                     const canvas = $('scan-canvas');
                     const ctx = canvas.getContext('2d', { willReadFrequently: true });
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     ctx.drawImage(video, 0, 0);
                     const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(img.data, img.width, img.height);
-                    if (code) detected = { value: code.data, format: 'qr_code', cornerPoints: [code.location.topLeftCorner, code.location.topRightCorner, code.location.bottomRightCorner, code.location.bottomLeftCorner] };
+                    try {
+                        const lum = new ZXing.RGBLuminanceSource(img.data, canvas.width, canvas.height);
+                        const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum));
+                        const result = S.zxingReader.decode(bmp);
+                        // getBarcodeFormat() returns a numeric enum — look up its name via BarcodeFormat
+                        const fmtNum = result.getBarcodeFormat();
+                        const fmtName = Object.keys(ZXing.BarcodeFormat).find(k => ZXing.BarcodeFormat[k] === fmtNum) || '';
+                        const sym = ZXING_TO_SYM[fmtName] || fmtName.toLowerCase();
+                        const pts = result.getResultPoints();
+                        detected = { value: result.getText(), format: sym, cornerPoints: pts.length ? zxingPointsToCorners(pts) : null };
+                    } catch (_) { /* NotFoundException — no barcode in frame */ }
                 }
 
                 if (detected && S.isScanning) onDetected(detected);
