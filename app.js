@@ -667,11 +667,13 @@ function makeTextRow(label, field, value, cfg, placeholder = '', onSave, inputTy
     const lbl = document.createElement('span'); lbl.className = 'row-label'; lbl.textContent = label;
     const inp = document.createElement('input'); inp.className = 'text-input';
     inp.type = inputType; inp.placeholder = placeholder; inp.value = value;
-    inp.addEventListener('change', () => {
+    const save = () => {
         const v = inputType === 'number' ? (parseInt(inp.value) || 0) : inp.value;
         setField(field, v);
         if (onSave) onSave(inp.value);
-    });
+    };
+    inp.addEventListener('input', save);
+    inp.addEventListener('blur', save);
     row.append(lbl, inp); return row;
 }
 
@@ -794,7 +796,7 @@ function makeExtraParamsSection(cfg) {
 
         [
             makeTextRow('Key',   'name',  param.name,  param, 'query_key',   v => { param.name  = v; saveConfigs(); updatePreview(cfg); }),
-            makeTextRow('Label', 'label', param.label, param, 'User prompt', v => { param.label = v; saveConfigs(); }),
+            makeTextRow('Label', 'label', param.label, param, 'User prompt', v => { param.label = v; saveConfigs(); updatePreview(cfg); }),
             makeSelectRow('Mode', 'inputMode', modeOptions, modeLabels, param, () => {
                 saveConfigs(); renderConfigEdit(cfg);
             }),
