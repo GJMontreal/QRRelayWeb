@@ -3,8 +3,8 @@ import { S } from './state.js';
 
 export function uid() {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = Math.random() * 16 | 0;
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replaceAll(/[xy]/g, c => {
+        const r = Math.trunc(Math.random() * 16 );
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
     });
 }
