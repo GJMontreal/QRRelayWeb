@@ -417,6 +417,7 @@ function showParamsSheet(params) {
         inp.type = p.inputMode === 'numberpad' ? 'number' : 'text';
         inp.placeholder = p.label || p.name;
         inp.value = S.pendingParams[p.id] || '';
+        inp.autocapitalize = 'off'; inp.autocorrect = 'off'; inp.spellcheck = false;
         inp.addEventListener('input', () => { S.pendingParams[p.id] = inp.value; });
         sec.append(lbl, inp); form.appendChild(sec);
     });
@@ -667,6 +668,7 @@ function makeTextRow(label, field, value, cfg, placeholder = '', onSave, inputTy
     const lbl = document.createElement('span'); lbl.className = 'row-label'; lbl.textContent = label;
     const inp = document.createElement('input'); inp.className = 'text-input';
     inp.type = inputType; inp.placeholder = placeholder; inp.value = value;
+    inp.autocapitalize = 'off'; inp.autocorrect = 'off'; inp.spellcheck = false;
     const save = () => {
         const v = inputType === 'number' ? (parseInt(inp.value) || 0) : inp.value;
         setField(field, v);
